@@ -1,0 +1,42 @@
+name: BAS Keepalive2 Daily
+
+on:
+  # 每天 UTC 时间 00:00-01:00 每十分钟执行一次 (北京时间 08:00-09:00)
+  schedule:
+    - cron: '0-59/10 0 * * *'
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    
+    env:
+      BAS_EMAIL: ${{ secrets.BAS_EMAIL }}
+      BAS_PASSWORD: ${{ secrets.BAS_PASSWORD }}
+      BAS_URL: ${{ secrets.BAS_URL }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: |
+          npm install playwright
+          npx playwright install chromium
+      
+      - name: Run keepalive script
+        run: node keepalive.js
+      
+      - name: Upload screenshots (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: "*.png"
+          retention-days: 7

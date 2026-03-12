@@ -1,11 +1,6 @@
 # Dependencies
 node_modules/
 
-# Screenshots
-*.png
-*.jpg
-*.jpeg
-
 # Logs
 *.log
 npm-debug.log*

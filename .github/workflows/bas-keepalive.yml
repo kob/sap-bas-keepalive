@@ -32,11 +32,3 @@ jobs:
       
       - name: Run keepalive script
         run: node keepalive.js
-      
-      - name: Upload screenshots (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: "*.png"
-          retention-days: 7

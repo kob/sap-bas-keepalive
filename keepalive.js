@@ -113,15 +113,13 @@ if (!process.env.BAS_EMAIL || !process.env.BAS_PASSWORD || !process.env.BAS_URL)
         
         console.log('启动按钮已点击，等待工作区变为 RUNNING 状态...');
 
-        // 9. 等待工作区变为 RUNNING 状态,使用 iframe 中的状态元素进行等待
+        // 10. 等待工作区变为 RUNNING 状态,使用 iframe 中的状态元素进行等待
         const runningStatusLocator = wsManagerFrame.locator(`#ErrorMsg0:has-text("RUNNING")`);
         await runningStatusLocator.waitFor({ state: 'visible', timeout: 120000 }); // 增加超时时间，启动可能需要几分钟
         console.log('工作区已进入 RUNNING 状态！');
 
 
     } catch (err) {
-        console.error('发生错误，保存截图到 error.png');
-        await page.screenshot({ path: 'error.png' });
         console.error('错误详情:', err.message);
     } finally {
         await browser.close();

@@ -1,10 +1,8 @@
 name: BAS Keepalive Daily
 
 on:
-  # 每天 UTC 时间 00:00-01:00 每十分钟执行一次 (北京时间 08:00-09:00)
   schedule:
-    - cron: '0-59/10 0 * * *'
-  # 允许手动触发
+      - cron: '2 10 * * *'
   workflow_dispatch:
 
 jobs:
@@ -19,7 +17,14 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+      
+      # 👇 建议添加：缓存 Playwright 的浏览器二进制文件
+      - name: Cache Playwright bins
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,7 +34,8 @@ jobs:
       - name: Install dependencies
         run: |
           npm install playwright
-          npx playwright install chromium
+          # 如果有 package.json，建议用 npm ci 或 npm install
+          # npx playwright install chromium # 通常 npm install 后这步是自动的，显式运行也无妨
       
       - name: Run keepalive script
         run: node keepalive.js

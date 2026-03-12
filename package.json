@@ -1,5 +1,5 @@
 {
-  "name": "bas-keepalive2",
+  "name": "bas-keepalive",
   "version": "1.0.0",
   "description": "SAP Business Application Studio keepalive script",
   "main": "keepalive.js",

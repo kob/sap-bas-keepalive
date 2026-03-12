@@ -1,4 +1,4 @@
-name: BAS Keepalive2 Daily
+name: BAS Keepalive Daily
 
 on:
   # 每天 UTC 时间 00:00-01:00 每十分钟执行一次 (北京时间 08:00-09:00)
@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       BAS_EMAIL: ${{ secrets.BAS_EMAIL }}
       BAS_PASSWORD: ${{ secrets.BAS_PASSWORD }}
       BAS_URL: ${{ secrets.BAS_URL }}

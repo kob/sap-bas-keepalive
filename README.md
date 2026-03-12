@@ -1,4 +1,4 @@
-# BAS Keepalive2
+# BAS Keepalive
 
 通过 GitHub Actions 每天定时运行 SAP Business Application Studio 保持活跃脚本。
 
@@ -31,7 +31,7 @@
 
 ### 4. 手动运行
 
-在 GitHub Actions 页面，选择 "BAS Keepalive2 Daily" 工作流，点击 "Run workflow" 手动触发。
+在 GitHub Actions 页面，选择 "BAS Keepalive Daily" 工作流，点击 "Run workflow" 手动触发。
 
 ## 本地运行
 

@@ -2,7 +2,7 @@
 
 通过 GitHub Actions 每天定时运行 SAP Business Application Studio 保持活跃脚本。
 
-## 功能test
+## 功能
 
 - 自动登录 BAS 账户
 - 检查工作区状态

@@ -2,7 +2,7 @@ name: BAS Keepalive Daily
 
 on:
   schedule:
-      - cron: '2 10 * * *'
+      - cron: '28 10 * * *'
   workflow_dispatch:
 
 jobs:

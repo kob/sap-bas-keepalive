@@ -1,8 +1,11 @@
 name: BAS Keepalive Daily
 
 on:
+  # 每天 UTC 时间 00:30 执行 (北京时间 08:30)
   schedule:
-      - cron: '*/2 * * * *'
+  #  - cron: '0-59/10 0 * * *'
+  - cron: '30 1 * * *'
+  # 允许手动触发
   workflow_dispatch:
 
 jobs:
@@ -10,15 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       BAS_EMAIL: ${{ secrets.BAS_EMAIL }}
       BAS_PASSWORD: ${{ secrets.BAS_PASSWORD }}
       BAS_URL: ${{ secrets.BAS_URL }}
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
-            
+        uses: actions/checkout@v4
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -27,8 +29,15 @@ jobs:
       - name: Install dependencies
         run: |
           npm install playwright
-          # 如果有 package.json，建议用 npm ci 或 npm install
-          # npx playwright install chromium # 通常 npm install 后这步是自动的，显式运行也无妨
+          npx playwright install chromium
       
       - name: Run keepalive script
         run: node keepalive.js
+      
+      - name: Upload screenshots (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: "*.png"
+          retention-days: 7

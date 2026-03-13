@@ -30,15 +30,31 @@ if (!process.env.BAS_EMAIL || !process.env.BAS_PASSWORD || !process.env.BAS_URL)
             const emailSelector = 'input[name="j_username"], input[type="email"], input[name="login"]';
             await page.waitForSelector(emailSelector, { timeout: 20000 });
             await page.fill(emailSelector, process.env.BAS_EMAIL);
-            
+
             const nextBtn = 'button:has-text("Next"), #logOnFormSubmit, input[type="submit"]';
             await page.click(nextBtn);
 
             const passSelector = 'input[name="j_password"], input[type="password"]';
             await page.waitForSelector(passSelector, { timeout: 20000 });
             await page.fill(passSelector, process.env.BAS_PASSWORD);
+
+            // 勾选"保持登录"复选框
+            console.log('正在查找"保持登录"复选框...');
+            const keepSignedInSelector = 'input[type="checkbox"][data-testid*="remember"], input[type="checkbox"][id*="remember"], input[type="checkbox"][id*="KeepSignedIn"], input[type="checkbox"][name*="remember"]';
+            try {
+                const checkbox = page.locator(keepSignedInSelector);
+                if (await checkbox.isVisible({ timeout: 5000 })) {
+                    console.log('找到"保持登录"复选框，正在勾选...');
+                    await checkbox.check();
+                } else {
+                    console.log('未找到"保持登录"复选框');
+                }
+            } catch (e) {
+                console.log('未检测到"保持登录"复选框，跳过');
+            }
+
             await page.click(nextBtn);
-            
+
             console.log('登录表单已提交，等待跳转...');
             await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 45000 })
                 .catch(() => console.log('等待跳转超时，尝试继续执行...'));
@@ -85,7 +101,7 @@ if (!process.env.BAS_EMAIL || !process.env.BAS_PASSWORD || !process.env.BAS_URL)
 
         // 7. 等待 iframe 内部的网络请求平息，确保数据加载完成
         console.log('等待 ws-manager iframe 内部网络请求完成...');
-        await wsManagerFrame.waitForLoadState('networkidle', { timeout: 45000 });
+        await Bb.waitForLoadState('networkidle', { timeout: 45000 });
         console.log('ws-manager iframe 内部网络活动已平息，内容应已完全加载。');
 
         // 8. 检查工作区状态 ---

@@ -4,7 +4,7 @@ on:
   # 每天 UTC 时间 00:30 执行 (北京时间 08:30)
   schedule:
   #  - cron: '0-59/10 0 * * *'
-  - cron: '*/30 * * * *'
+  - cron: '05 0 * * *'
   # 允许手动触发
   workflow_dispatch:
 

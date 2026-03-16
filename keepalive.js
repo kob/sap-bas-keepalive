@@ -101,7 +101,7 @@ if (!process.env.BAS_EMAIL || !process.env.BAS_PASSWORD || !process.env.BAS_URL)
 
         // 7. 等待 iframe 内部的网络请求平息，确保数据加载完成
         console.log('等待 ws-manager iframe 内部网络请求完成...');
-        await Bb.waitForLoadState('networkidle', { timeout: 45000 });
+      await wsManagerFrame.waitForLoadState('networkidle', { timeout: 45000 });
         console.log('ws-manager iframe 内部网络活动已平息，内容应已完全加载。');
 
         // 8. 检查工作区状态 ---

@@ -206,7 +206,7 @@ async function handlePrivacyPopup(page, options = {}) {
 
 (async () => {
     const browser = await chromium.launch({ 
-        headless: false,
+        headless: true,
         slowMo: 100,
         args: process.platform === 'linux'
             ? ['--no-sandbox', '--disable-setuid-sandbox']

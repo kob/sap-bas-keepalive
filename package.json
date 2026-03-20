@@ -1,12 +1,12 @@
 {
-  "name": "bas-keepalive",
+  "name": "sap-bas-keepalive",
   "version": "1.0.0",
-  "description": "SAP Business Application Studio keepalive script",
-  "main": "keepalive.js",
-  "scripts": {
-    "start": "node keepalive.js"
-  },
+  "description": "SAP Business Application Studio Keep-alive Script",
+  "main": "index.js",
   "dependencies": {
     "playwright": "^1.40.0"
+  },
+  "scripts": {
+    "start": "node Keepalive.js"
   }
 }

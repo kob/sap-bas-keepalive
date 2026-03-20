@@ -37,7 +37,7 @@ jobs:
           BAS_WSID: ${{ secrets.BAS_WSID }}
           # 强制无头模式（Actions 必须开启）
           HEADLESS: "true"
-        run: node index.js
+        run: node keepalive.js
 
       - name: Upload Artifacts (Screenshots)
         if: always() # 无论成功还是失败，都上传截图供检查

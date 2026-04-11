@@ -10,7 +10,7 @@ on:
 jobs:
   bas-job:
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # 防止脚本卡死占用额度
+    timeout-minutes: 15 # 并行保活，单账号约3分钟
     
     steps:
       - name: Checkout Code
@@ -30,13 +30,44 @@ jobs:
 
       - name: Run Keep-Alive Script
         env:
-          # 从 GitHub Secrets 读取加密变量
+          # 多账号模式：在 GitHub Secrets 中设置 BAS_URL_1, BAS_EMAIL_1, BAS_PASSWORD_1, BAS_WSID_1 等
+          # 索引从 1 开始递增，脚本自动检测。未设置的会为空，脚本自动跳过。
+          # 也可使用 BAS_NAME_1 等设置账号别名
+          BAS_URL_1: ${{ secrets.BAS_URL_1 }}
+          BAS_EMAIL_1: ${{ secrets.BAS_EMAIL_1 }}
+          BAS_PASSWORD_1: ${{ secrets.BAS_PASSWORD_1 }}
+          BAS_WSID_1: ${{ secrets.BAS_WSID_1 }}
+          BAS_NAME_1: ${{ secrets.BAS_NAME_1 }}
+
+          BAS_URL_2: ${{ secrets.BAS_URL_2 }}
+          BAS_EMAIL_2: ${{ secrets.BAS_EMAIL_2 }}
+          BAS_PASSWORD_2: ${{ secrets.BAS_PASSWORD_2 }}
+          BAS_WSID_2: ${{ secrets.BAS_WSID_2 }}
+          BAS_NAME_2: ${{ secrets.BAS_NAME_2 }}
+
+          BAS_URL_3: ${{ secrets.BAS_URL_3 }}
+          BAS_EMAIL_3: ${{ secrets.BAS_EMAIL_3 }}
+          BAS_PASSWORD_3: ${{ secrets.BAS_PASSWORD_3 }}
+          BAS_WSID_3: ${{ secrets.BAS_WSID_3 }}
+          BAS_NAME_3: ${{ secrets.BAS_NAME_3 }}
+
+          BAS_URL_4: ${{ secrets.BAS_URL_4 }}
+          BAS_EMAIL_4: ${{ secrets.BAS_EMAIL_4 }}
+          BAS_PASSWORD_4: ${{ secrets.BAS_PASSWORD_4 }}
+          BAS_WSID_4: ${{ secrets.BAS_WSID_4 }}
+          BAS_NAME_4: ${{ secrets.BAS_NAME_4 }}
+
+          BAS_URL_5: ${{ secrets.BAS_URL_5 }}
+          BAS_EMAIL_5: ${{ secrets.BAS_EMAIL_5 }}
+          BAS_PASSWORD_5: ${{ secrets.BAS_PASSWORD_5 }}
+          BAS_WSID_5: ${{ secrets.BAS_WSID_5 }}
+          BAS_NAME_5: ${{ secrets.BAS_NAME_5 }}
+
+          # 单账号模式（回退，如果没有设置 BAS_URL_1 则使用这些）
           BAS_URL: ${{ secrets.BAS_URL }}
           BAS_EMAIL: ${{ secrets.BAS_EMAIL }}
           BAS_PASSWORD: ${{ secrets.BAS_PASSWORD }}
           BAS_WSID: ${{ secrets.BAS_WSID }}
-          # 强制无头模式（Actions 必须开启）
-          HEADLESS: "true"
         run: node keepalive.js
 
       - name: Upload Artifacts (Screenshots)

@@ -4,6 +4,7 @@
   "description": "SAP Business Application Studio Keep-alive Script",
   "main": "index.js",
   "dependencies": {
+    "dotenv": "^16.4.7",
     "playwright": "^1.40.0"
   },
   "scripts": {

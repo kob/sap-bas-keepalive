@@ -1,9 +1,7 @@
+require('dotenv').config();
 const { chromium } = require('playwright');
-
-
 const os = require('os');
 const path = require('path');
-
 
 function getRequiredEnv(name) {
     const value = process.env[name];
@@ -20,6 +18,50 @@ function getOptionalNumberEnv(name, defaultValue) {
     }
     const parsed = Number(raw);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
+}
+
+/**
+ * 解析账号配置，支持多账号
+ * 按索引读取 BAS_URL_1/BAS_EMAIL_1/BAS_PASSWORD_1/BAS_WSID_1, BAS_URL_2/... 等
+ * 如果没有带索引的变量，回退到 BAS_URL/BAS_EMAIL/BAS_PASSWORD/BAS_WSID 单账号模式
+ */
+function parseAccounts() {
+    const accounts = [];
+
+    // 尝试按索引读取多账号
+    for (let i = 1; ; i++) {
+        const url = process.env[`BAS_URL_${i}`];
+        if (!url || !url.trim()) break;
+        const email = process.env[`BAS_EMAIL_${i}`];
+        const password = process.env[`BAS_PASSWORD_${i}`];
+        const wsid = process.env[`BAS_WSID_${i}`];
+        const name = process.env[`BAS_NAME_${i}`]?.trim() || `账号${i}`;
+
+        if (!email || !password || !wsid) {
+            throw new Error(`账号 ${i} (BAS_URL_${i}) 缺少必填字段 BAS_EMAIL_${i}/BAS_PASSWORD_${i}/BAS_WSID_${i}`);
+        }
+
+        accounts.push({
+            name,
+            url: url.trim(),
+            email: email.trim(),
+            password: password.trim(),
+            wsid: wsid.trim(),
+        });
+    }
+
+    if (accounts.length > 0) {
+        return accounts;
+    }
+
+    // 单账号模式（不带索引）
+    return [{
+        name: '默认账号',
+        url: getRequiredEnv('BAS_URL'),
+        email: getRequiredEnv('BAS_EMAIL'),
+        password: getRequiredEnv('BAS_PASSWORD'),
+        wsid: getRequiredEnv('BAS_WSID'),
+    }];
 }
 
 async function tryCheckRememberMe(page, options = {}) {
@@ -204,178 +246,201 @@ async function handlePrivacyPopup(page, options = {}) {
     return popupVisible;
 }
 
-(async () => {
-    const browser = await chromium.launch({ 
-        headless: true,
-        slowMo: 100,
-        args: process.platform === 'linux'
-            ? ['--no-sandbox', '--disable-setuid-sandbox']
-            : []
-    });
+/**
+ * 对单个账号执行保活操作
+ */
+async function keepaliveOne(browser, account, globalOptions) {
+    const { postPrivacyWaitMs, rememberMeWaitMs } = globalOptions;
+    const prefix = `[${account.name}]`;
+
     const context = await browser.newContext({
         viewport: { width: 1280, height: 720 }
     });
     const page = await context.newPage();
 
-    const targetUrl = getRequiredEnv('BAS_URL');
-    const basEmail = getRequiredEnv('BAS_EMAIL');
-    const basPassword = getRequiredEnv('BAS_PASSWORD');
-    const basWorkspaceId = getRequiredEnv('BAS_WSID');
-    const postPrivacyWaitMs = getOptionalNumberEnv('BAS_POST_PRIVACY_WAIT_MS', 800);
-    const rememberMeWaitMs = getOptionalNumberEnv('BAS_REMEMBER_WAIT_MS', 1800);
-
-    console.log('正在打开 BAS 主页...');
-
     try {
+        console.log(`${prefix} 正在打开 BAS 主页...`);
+
         // 1. 访问页面
-        await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 });
+        await page.goto(account.url, { waitUntil: 'networkidle', timeout: 60000 });
 
         // 2. 执行登录逻辑
         if (page.url().includes('authentication') || page.url().includes('login')) {
-            console.log('检测到登录页，开始输入凭据...');
+            console.log(`${prefix} 检测到登录页，开始输入凭据...`);
             const emailSelector = 'input[name="j_username"], input[type="email"], input[name="login"]';
             await page.waitForSelector(emailSelector, { timeout: 20000 });
-            await page.fill(emailSelector, basEmail);
+            await page.fill(emailSelector, account.email);
 
             const nextBtn = 'button:has-text("Next"), #logOnFormSubmit, input[type="submit"]';
             await page.click(nextBtn);
 
             const passSelector = 'input[name="j_password"], input[type="password"]';
             await page.waitForSelector(passSelector, { timeout: 3000 });
-            await page.fill(passSelector, basPassword);
+            await page.fill(passSelector, account.password);
 
             // 勾选"保持登录"复选框
-            console.log('正在查找"保持登录"复选框...');
+            console.log(`${prefix} 正在查找"保持登录"复选框...`);
             try {
                 const checked = await tryCheckRememberMe(page, { timeoutMs: rememberMeWaitMs });
                 if (checked) {
-                    console.log('找到"保持登录"复选框，正在勾选...');
+                    console.log(`${prefix} 找到"保持登录"复选框，正在勾选...`);
                 } else {
-                    console.log('未找到"保持登录"复选框');
+                    console.log(`${prefix} 未找到"保持登录"复选框`);
                 }
             } catch (e) {
-                console.log('未检测到"保持登录"复选框，跳过');
+                console.log(`${prefix} 未检测到"保持登录"复选框，跳过`);
             }
 
             await page.click(nextBtn);
 
-            console.log('登录表单已提交，等待跳转...');
+            console.log(`${prefix} 登录表单已提交，等待跳转...`);
             await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 3000 })
-                .catch(() => console.log('等待跳转超时，尝试继续执行...'));
+                .catch(() => console.log(`${prefix} 等待跳转超时，尝试继续执行...`));
         }
 
         // 3. 处理登录后的隐私声明弹窗
-        console.log('正在检查登录后的隐私弹窗...');
+        console.log(`${prefix} 正在检查登录后的隐私弹窗...`);
         try {
-            const handled = await handlePrivacyPopup(page, { timeoutMs: 15000, postClickWaitMs: postPrivacyWaitMs });
+            const handled = await handlePrivacyPopup(page, { timeoutMs: 15000, postClickWaitMs });
             if (handled) {
-                console.log('已勾选隐私弹窗并点击 OK。');
+                console.log(`${prefix} 已勾选隐私弹窗并点击 OK。`);
             } else {
-                console.log('未检测到登录后隐私弹窗，跳过。');
+                console.log(`${prefix} 未检测到登录后隐私弹窗，跳过。`);
             }
         } catch (e) {
-            console.log('未检测到弹窗或弹窗未加载，跳过弹窗处理。');
+            console.log(`${prefix} 未检测到弹窗或弹窗未加载，跳过弹窗处理。`);
         }
 
         // 4. 等待主页面的 ws-manager iframe 元素出现并可见
-        console.log('等待主页面中的 ws-manager iframe 元素...');
+        console.log(`${prefix} 等待主页面中的 ws-manager iframe 元素...`);
         const iframeElement = page.locator('#ws-manager');
         await iframeElement.waitFor({ state: 'visible', timeout: 30000 });
-        console.log('主页面中的 ws-manager iframe 元素已找到并可见。');
+        console.log(`${prefix} 主页面中的 ws-manager iframe 元素已找到并可见。`);
 
         // 5. 获取 iframe 的引用
-        console.log('正在获取 ws-manager iframe 的引用...');
+        console.log(`${prefix} 正在获取 ws-manager iframe 的引用...`);
         const iframeHandle = await iframeElement.elementHandle();
         const wsManagerFrame = iframeHandle ? await iframeHandle.contentFrame() : null;
-        
+
         if (!wsManagerFrame) {
             throw new Error('无法找到 ID 或 name 为 "ws-manager" 的 iframe。');
         }
-        console.log('已成功获取 ws-manager iframe 的引用。');
+        console.log(`${prefix} 已成功获取 ws-manager iframe 的引用。`);
 
         // 6. 等待 iframe 内部的 DOM 加载
-        console.log('等待 ws-manager iframe 内部内容加载...');
-        // 等待 iframe 内部的 body 元素出现
+        console.log(`${prefix} 等待 ws-manager iframe 内部内容加载...`);
         await wsManagerFrame.waitForLoadState('domcontentloaded', { timeout: 30000 });
-        console.log('ws-manager iframe 内部 DOM 已加载。');
+        console.log(`${prefix} ws-manager iframe 内部 DOM 已加载。`);
 
-        // 7. 等待 iframe 内部的网络请求平息，确保数据加载完成
-        console.log('等待 ws-manager iframe 内部网络请求完成...');
+        // 7. 等待 iframe 内部的网络请求平息
+        console.log(`${prefix} 等待 ws-manager iframe 内部网络请求完成...`);
         try {
             await wsManagerFrame.waitForLoadState('networkidle', { timeout: 30000 });
-            console.log('ws-manager iframe 内部网络活动已平息，内容应已完全加载。');
+            console.log(`${prefix} ws-manager iframe 内部网络活动已平息。`);
         } catch (e) {
-            console.log('网络请求未完全平息，但 DOM 已加载，继续执行...');
+            console.log(`${prefix} 网络请求未完全平息，但 DOM 已加载，继续执行...`);
         }
 
-        // 8. 检查工作区状态并决定下一步 (优化版)
-  console.log('检查当前工作区状态...');
-  const runningStatusLocator = wsManagerFrame.locator(`#ErrorMsg0:has-text("RUNNING")`);
-  const stoppedStatusLocator = wsManagerFrame.locator(`#ErrorMsg0:has-text("STOPPED")`);
+        // 8. 检查工作区状态并决定下一步
+        console.log(`${prefix} 检查当前工作区状态...`);
+        const runningStatusLocator = wsManagerFrame.locator(`#ErrorMsg0:has-text("RUNNING")`);
+        const stoppedStatusLocator = wsManagerFrame.locator(`#ErrorMsg0:has-text("STOPPED")`);
 
-  // 检查是否为 RUNNING 状态
-  const isRunning = await runningStatusLocator.count() > 0 && await runningStatusLocator.isVisible();
-  if (isRunning) {
-    console.log('工作区当前状态已经是 RUNNING，跳过启动步骤。');
-    // 直接跳出判断，进入后续的打开工作区流程
-  } 
-  // 检查是否为 STOPPED 状态
-  else {
-    const isStopped = await stoppedStatusLocator.count() > 0 && await stoppedStatusLocator.isVisible();
-    if (isStopped) {
-      console.log('工作区当前状态为 STOPPED，准备启动...');
+        const isRunning = await runningStatusLocator.count() > 0 && await runningStatusLocator.isVisible();
+        if (isRunning) {
+            console.log(`${prefix} 工作区当前状态已经是 RUNNING，跳过启动步骤。`);
+        } else {
+            const isStopped = await stoppedStatusLocator.count() > 0 && await stoppedStatusLocator.isVisible();
+            if (isStopped) {
+                console.log(`${prefix} 工作区当前状态为 STOPPED，准备启动...`);
 
-      // 9. 在 iframe 内部寻找包含 "play-circle" 图标的按钮并点击
-      console.log('在 iframe 中寻找包含 "play-circle" 图标的启动按钮...');
-      const startButtonInFrame = wsManagerFrame.locator('button:has(svg[data-icon="play-circle"])');
-      await startButtonInFrame.waitFor({ state: 'visible', timeout: 30000 });
-      console.log('在 iframe 中找到启动按钮 (包含 play-circle 图标)，正在点击...');
-      await startButtonInFrame.click();
-      console.log('启动按钮已点击，等待工作区变为 RUNNING 状态...');
+                // 9. 在 iframe 内部寻找启动按钮并点击
+                console.log(`${prefix} 在 iframe 中寻找启动按钮...`);
+                const startButtonInFrame = wsManagerFrame.locator('button:has(svg[data-icon="play-circle"])');
+                await startButtonInFrame.waitFor({ state: 'visible', timeout: 30000 });
+                console.log(`${prefix} 找到启动按钮，正在点击...`);
+                await startButtonInFrame.click();
+                console.log(`${prefix} 启动按钮已点击，等待工作区变为 RUNNING 状态...`);
 
-      // 10. 等待工作区变为 RUNNING 状态
-      await runningStatusLocator.waitFor({ state: 'visible', timeout: 120000 });
-      console.log('工作区已进入 RUNNING 状态！');
-    } else {
-      throw new Error('无法识别工作区当前状态，既不是 STOPPED 也不是 RUNNING。');
-    }
-  }
+                // 10. 等待工作区变为 RUNNING 状态
+                await runningStatusLocator.waitFor({ state: 'visible', timeout: 120000 });
+                console.log(`${prefix} 工作区已进入 RUNNING 状态！`);
+            } else {
+                throw new Error('无法识别工作区当前状态，既不是 STOPPED 也不是 RUNNING。');
+            }
+        }
 
-  // 注意：原代码中的第 11 步（进入工作区）保持不变，现在无论启动还是直接进入，都会执行到这一步
-
-     
         // 11. 进入工作区
-        console.log('正在进入工作区...');
-        const workspaceUrl = `${targetUrl}#${basWorkspaceId}`;
-        console.log(`工作区链接: ${workspaceUrl}`);
-        await page.goto(workspaceUrl, { waitUntil: 'networkidle', timeout: 60000 });
-        console.log('已成功进入工作区！');
+        console.log(`${prefix} 正在进入工作区...`);
+        const workspaceUrl = `${account.url}#${account.wsid}`;
+        console.log(`${prefix} 工作区链接: ${workspaceUrl}`);
+        await page.goto(workspaceUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        await page.waitForTimeout(10000);
+        console.log(`${prefix} 已成功进入工作区！`);
 
         // 12. 处理进入工作区后的隐私声明弹框
-        console.log('正在检查工作区内的隐私声明弹框...');
+        console.log(`${prefix} 正在检查工作区内的隐私声明弹框...`);
         try {
-            const handledInWorkspace = await handlePrivacyPopup(page, { timeoutMs: 10000, postClickWaitMs: postPrivacyWaitMs });
+            const handledInWorkspace = await handlePrivacyPopup(page, { timeoutMs: 10000, postClickWaitMs });
             if (handledInWorkspace) {
-                console.log('工作区隐私声明弹框已处理。');
+                console.log(`${prefix} 工作区隐私声明弹框已处理。`);
             } else {
-                console.log('未检测到工作区隐私弹框，跳过。');
+                console.log(`${prefix} 未检测到工作区隐私弹框，跳过。`);
             }
         } catch (e) {
-            console.log('未检测到工作区隐私弹框，跳过。');
+            console.log(`${prefix} 未检测到工作区隐私弹框，跳过。`);
         }
 
         // 13. 等待30秒后截图保存
-        console.log('等待30秒...');
+        console.log(`${prefix} 等待30秒...`);
         await page.waitForTimeout(30000);
-        console.log('正在截图...');
+        console.log(`${prefix} 正在截图...`);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const screenshotPath = path.join(os.tmpdir(), `bas-keepalive-${timestamp}.png`);
+        const safeName = account.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+        const screenshotPath = path.join(os.tmpdir(), `bas-keepalive-${safeName}-${timestamp}.png`);
         await page.screenshot({ path: screenshotPath, fullPage: false });
-        console.log(`截图已保存到: ${screenshotPath}`);
+        console.log(`${prefix} 截图已保存到: ${screenshotPath}`);
 
+        console.log(`${prefix} ✅ 保活完成！`);
     } catch (err) {
-        console.error('错误详情:', err.message);
+        console.error(`${prefix} ❌ 错误详情: ${err.message}`);
+    } finally {
+        await context.close();
+    }
+}
+
+(async () => {
+    const accounts = parseAccounts();
+    const globalOptions = {
+        postPrivacyWaitMs: getOptionalNumberEnv('BAS_POST_PRIVACY_WAIT_MS', 800),
+        rememberMeWaitMs: getOptionalNumberEnv('BAS_REMEMBER_WAIT_MS', 1800),
+    };
+
+    console.log(`共 ${accounts.length} 个账号需要保活，开始轮流执行...\n`);
+
+    const browser = await chromium.launch({
+        headless: true,
+        slowMo: 100,
+        args: process.platform === 'linux'
+            ? ['--no-sandbox', '--disable-setuid-sandbox']
+            : []
+    });
+
+    try {
+        const results = await Promise.allSettled(
+            accounts.map((account, i) => {
+                console.log(`========== ${account.name} (${i + 1}/${accounts.length}) ==========`);
+                return keepaliveOne(browser, account, globalOptions);
+            })
+        );
+
+        // 输出汇总
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        console.log(`\n========== 执行汇总：成功 ${succeeded}/${accounts.length}，失败 ${failed} ==========`);
     } finally {
         await browser.close();
     }
+
+    console.log('\n========== 全部账号保活完成 ==========');
 })();

@@ -15,4 +15,18 @@ RUN npm install && npx playwright install chromium
 
 COPY . .
 
-CMD ["node", "keepalive.js"]
+# CRON: cron 表达式，默认每 30 分钟执行一次
+# TZ: 时区，默认 Asia/Shanghai
+ENV CRON="*/30 * * * *" \
+    TZ="Asia/Shanghai"
+
+# 安装 cron 和时区数据
+RUN apt-get update && apt-get install -y --no-install-recommends cron tzdata \
+    && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo "${TZ}" > /etc/timezone \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -189,6 +189,54 @@ async function tryCheckRememberMe(page, options = {}) {
     return false;
 }
 
+/**
+ * 关闭可能遮挡页面的所有弹框（模态框、遮罩层）
+ */
+async function closeAllBlockingDialogs(page) {
+    try {
+        // 查找所有 role="dialog" 或 modal 类名的元素
+        const dialogs = page.locator('[role="dialog"], .modal, .popup, .dialog, .modal-dialog, .sapMDialog');
+        const count = await dialogs.count();
+        for (let i = 0; i < count; i++) {
+            const dialog = dialogs.nth(i);
+            try {
+                if (await dialog.isVisible()) {
+                    // 查找关闭按钮（X、关闭、取消、OK、确定）
+                    const closeButtons = dialog.locator('[aria-label*="close" i], button:has-text("Close"), button:has-text("关闭"), .close-btn, [data-testid*="close"], .sapButtonOK, button:has-text("OK"), button:has-text("确定")');
+                    for (let j = 0; j < await closeButtons.count(); j++) {
+                        try {
+                            const btn = closeButtons.nth(j);
+                            if (await btn.isVisible()) {
+                                await btn.click();
+                                await page.waitForTimeout(300);
+                                break;
+                            }
+                        } catch (_) {}
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // 查找遮罩层（overlay/backdrop）并点击以关闭
+        const overlays = page.locator('.overlay, .backdrop, .modal-backdrop, [class*="overlay"], [class*="backdrop"]');
+        for (let i = 0; i < await overlays.count(); i++) {
+            try {
+                const overlay = overlays.nth(i);
+                if (await overlay.isVisible()) {
+                    await overlay.click({ force: true });
+                    await page.waitForTimeout(200);
+                }
+            } catch (_) {}
+        }
+
+        // 尝试按下 Escape 键关闭模态框
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(200);
+    } catch (e) {
+        // 忽略任何错误，不让它影响主流程
+    }
+}
+
 async function handlePrivacyPopup(page, options = {}) {
     const timeoutMs = options.timeoutMs ?? 12000;
     const postClickWaitMs = options.postClickWaitMs ?? 800;
@@ -271,7 +319,134 @@ async function handlePrivacyPopup(page, options = {}) {
 }
 
 /**
+ * 处理登录后进入的页面的隐私环节（不是弹窗，而是页面的一部分）
+ * 需要勾选 <input type="checkbox" id="do-not-show-checkbox" name="do-not-show-checkbox">
+ * 然后点击 <button id="confirm-notification-btn" type="button" class="notification-btn">OK</button>
+ */
+async function handleIndexPagePrivacyPopup(page, options = {}) {
+    const timeoutMs = options.timeoutMs ?? 15000;
+    const prefix = options.prefix || '';
+    
+    console.log(`${prefix}检查登录后页面的隐私环节...`);
+    
+    // 这不是一个弹窗，而是页面中的一部分，所以直接查找元素
+    // 先尝试查找复选框
+    const checkboxCandidates = [
+        page.locator('input#do-not-show-checkbox[name="do-not-show-checkbox"]').first(),
+        page.locator('#do-not-show-checkbox').first(),
+        page.locator('input[type="checkbox"][id*="do-not-show"]').first(),
+        page.locator('input[type="checkbox"][name*="do-not-show"]').first(),
+        page.getByLabel(/do not show this message again|不再显示|不再提示/i).first(),
+    ];
+
+    let foundCheckbox = false;
+    let checkboxElement = null;
+    
+    for (const checkbox of checkboxCandidates) {
+        try {
+            await checkbox.waitFor({ state: 'visible', timeout: 5000 });
+            foundCheckbox = true;
+            checkboxElement = checkbox;
+            console.log(`${prefix}找到"不再显示"复选框`);
+            break;
+        } catch (e) {
+            // 尝试下一个候选
+        }
+    }
+
+    // 如果没有找到复选框，可能这个环节不存在
+    if (!foundCheckbox) {
+        console.log(`${prefix}未找到"不再显示"复选框，可能此环节不存在`);
+        return false;
+    }
+
+    // 勾选复选框
+    console.log(`${prefix}正在勾选"不再显示"复选框...`);
+    let checked = false;
+    try {
+        await checkboxElement.check({ force: true });
+        const isChecked = await checkboxElement.isChecked().catch(() => false);
+        if (!isChecked) {
+            await checkboxElement.click({ force: true });
+        }
+        if (await checkboxElement.isChecked().catch(() => false)) {
+            checked = true;
+            console.log(`${prefix}已成功勾选"不再显示"复选框`);
+        }
+    } catch (e) {
+        console.log(`${prefix}勾选复选框失败: ${e.message}`);
+    }
+
+    if (!checked) {
+        console.log(`${prefix}尝试通过文本点击复选框`);
+        const labelCandidates = [
+            page.getByText(/do not show this message again|不再显示|不再提示/i).first(),
+            page.locator('label:has-text("Do not show this message again"), label:has-text("不再显示"), label:has-text("不再提示")').first()
+        ];
+        for (const label of labelCandidates) {
+            try {
+                await label.waitFor({ state: 'visible', timeout: 2000 });
+                await label.click({ force: true });
+                checked = true;
+                console.log(`${prefix}通过文本点击成功勾选复选框`);
+                break;
+            } catch (e) {
+                // 继续尝试
+            }
+        }
+    }
+
+    // 点击OK按钮
+    console.log(`${prefix}正在点击OK按钮...`);
+    const okButtonCandidates = [
+        page.locator('button#confirm-notification-btn.notification-btn').first(),
+        page.locator('#confirm-notification-btn').first(),
+        page.locator('button:has-text("OK")').first(),
+        page.getByRole('button', { name: /^OK$/i }).first(),
+        page.locator('.notification-btn:has-text("OK")').first(),
+    ];
+
+    let clicked = false;
+    for (const button of okButtonCandidates) {
+        try {
+            await button.waitFor({ state: 'visible', timeout: 5000 });
+            await button.click();
+            clicked = true;
+            console.log(`${prefix}已成功点击OK按钮`);
+            break;
+        } catch (e) {
+            // 尝试下一个按钮
+        }
+    }
+
+    if (!clicked) {
+        console.log(`${prefix}未能点击OK按钮，尝试通过JavaScript点击`);
+        try {
+            await page.evaluate(() => {
+                const btn = document.querySelector('button#confirm-notification-btn');
+                if (btn) btn.click();
+            });
+            clicked = true;
+        } catch (e) {
+            console.log(`${prefix}通过JavaScript点击也失败`);
+        }
+    }
+
+    // 等待页面反应
+    await page.waitForTimeout(2000);
+    
+    if (checked && clicked) {
+        console.log(`${prefix}成功处理登录后页面的隐私环节`);
+        return true;
+    } else {
+        console.log(`${prefix}部分处理登录后页面的隐私环节（复选框: ${checked}, OK按钮: ${clicked})`);
+        return false;
+    }
+}
+
+/**
  * 对单个账号执行保活操作
+ * 返回 true 表示成功，抛出异常表示失败
  */
 async function keepaliveOne(browser, account, globalOptions) {
     const { postPrivacyWaitMs, rememberMeWaitMs } = globalOptions;
@@ -281,6 +456,7 @@ async function keepaliveOne(browser, account, globalOptions) {
         viewport: { width: 1280, height: 720 }
     });
     const page = await context.newPage();
+    let success = false;
 
     try {
         console.log(`${prefix} 正在打开 BAS 主页...`);
@@ -342,12 +518,47 @@ async function keepaliveOne(browser, account, globalOptions) {
             console.log(`${prefix} 未检测到弹窗或弹窗未加载，跳过弹窗处理。`);
         }
 
-        // 4. 等待主页面的 ws-manager iframe 元素出现并可见
+        // 3.5 处理登录后页面的隐私环节（登录后进入的页面）
+        console.log(`${prefix} 检查登录后页面的隐私环节...`);
+        try {
+            const handledIndex = await handleIndexPagePrivacyPopup(page, { 
+                timeoutMs: 10000, 
+                prefix: prefix 
+            });
+            if (handledIndex) {
+                console.log(`${prefix} 已处理登录后页面的隐私环节。`);
+            } else {
+                console.log(`${prefix} 未检测到登录后页面的隐私环节，跳过。`);
+            }
+        } catch (e) {
+            console.log(`${prefix} 处理登录后页面隐私环节时出错: ${e.message}`);
+        }
+
+        // 4. 等待主页面的 ws-manager iframe 元素
         console.log(`${prefix} 等待主页面中的 ws-manager iframe 元素...`);
-        // 先确保页面完全加载
         await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+        
+        // 先尝试关闭可能遮挡的弹框
+        await closeAllBlockingDialogs(page);
+        await page.waitForTimeout(500);
+
         const iframeElement = page.locator('#ws-manager');
-        await iframeElement.waitFor({ state: 'visible', timeout: 60000 });
+
+        // 先等 iframe 存在于 DOM，再等可见；如果一直 hidden，尝试刷新一次
+        await iframeElement.waitFor({ state: 'attached', timeout: 30000 });
+        console.log(`${prefix} iframe 已存在于 DOM，等待变为可见...`);
+
+        try {
+            await iframeElement.waitFor({ state: 'visible', timeout: 30000 });
+        } catch (e) {
+            // iframe hidden 可能是因为弹框遮挡，再尝试关一次弹框
+            await closeAllBlockingDialogs(page);
+            await page.waitForTimeout(1000);
+            await iframeElement.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {
+                console.log(`${prefix} iframe 仍为 hidden，尝试刷新页面...`);
+                throw e;
+            });
+        }
         console.log(`${prefix} 主页面中的 ws-manager iframe 元素已找到并可见。`);
 
         // 5. 获取 iframe 的引用
@@ -435,11 +646,22 @@ async function keepaliveOne(browser, account, globalOptions) {
         console.log(`${prefix} 截图已保存到: ${screenshotPath}`);
 
         console.log(`${prefix} ✅ 保活完成！`);
+        success = true;
     } catch (err) {
         console.error(`${prefix} ❌ 错误详情: ${err.message}`);
+        // 失败时截图用于诊断
+        try {
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            const safeName = account.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+            const failPath = path.join(os.tmpdir(), `bas-fail-${safeName}-${ts}.png`);
+            await page.screenshot({ path: failPath, fullPage: false });
+            console.log(`${prefix} 失败截图已保存到: ${failPath}`);
+        } catch (_) {}
+        throw err; // 重新抛出，让 Promise.allSettled 捕获
     } finally {
         await context.close();
     }
+    return success;
 }
 
 (async () => {

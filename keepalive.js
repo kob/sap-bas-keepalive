@@ -65,12 +65,6 @@ function processUrlWithProxy(originalUrl) {
             }
         }
     } else if (proxyMode === 'custom-proxy') {
-                return proxyUrl.toString();
-            } catch (e) {
-                console.warn(`Cloudflare Worker URL处理失败: ${e.message}`);
-            }
-        }
-    } else if (proxyMode === 'custom-proxy') {
         const customProxyBase = process.env.CUSTOM_PROXY_BASE;
         if (customProxyBase && customProxyBase.trim()) {
             try {
@@ -540,10 +534,17 @@ async function keepaliveOne(browser, account, globalOptions, proxyConfig) {
     const { postPrivacyWaitMs, rememberMeWaitMs } = globalOptions;
     const prefix = `[${account.name}]`;
 
-    const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
-        proxy: proxyConfig // 添加代理配置
-    });
+    const contextOptions = {
+        viewport: { width: 1280, height: 720 }
+    };
+    
+    // 只有当proxyConfig不为null时才添加代理配置
+    if (proxyConfig) {
+        contextOptions.proxy = proxyConfig;
+        console.log(`${prefix} 使用代理服务器: ${proxyConfig.server}`);
+    }
+    
+    const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
     let success = false;
 
@@ -792,10 +793,23 @@ async function keepaliveOne(browser, account, globalOptions, proxyConfig) {
             })
         );
 
-        // 输出汇总
+        // 输出汇总和详细错误信息
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected').length;
         console.log(`\n========== 执行汇总：成功 ${succeeded}/${accounts.length}，失败 ${failed} ==========`);
+        
+        // 显示失败账号的错误信息
+        if (failed > 0) {
+            console.log('\n========== 失败原因详情 ==========');
+            results.forEach((result, i) => {
+                if (result.status === 'rejected') {
+                    console.log(`账号${i + 1} (${accounts[i].name}): ${result.reason.message}`);
+                    if (result.reason.stack) {
+                        console.log(`堆栈: ${result.reason.stack.split('\n')[0]}`);
+                    }
+                }
+            });
+        }
     } finally {
         await browser.close();
     }

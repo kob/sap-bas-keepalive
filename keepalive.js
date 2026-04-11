@@ -294,8 +294,15 @@ async function keepaliveOne(browser, account, globalOptions) {
             await page.click(nextBtn);
 
             console.log(`${prefix} 登录表单已提交，等待跳转...`);
-            await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 3000 })
-                .catch(() => console.log(`${prefix} 等待跳转超时，尝试继续执行...`));
+            // 等待页面跳转完成（登录后通常跳转到主页）
+            try {
+                await page.waitForURL(url => !url.includes('authentication') && !url.includes('login'), { timeout: 30000 });
+            } catch (e) {
+                console.log(`${prefix} 等待跳转超时，尝试继续执行...`);
+            }
+            // 等待页面内容加载
+            await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+            await page.waitForTimeout(3000);
         }
 
         // 3. 处理登录后的隐私声明弹窗
@@ -313,8 +320,10 @@ async function keepaliveOne(browser, account, globalOptions) {
 
         // 4. 等待主页面的 ws-manager iframe 元素出现并可见
         console.log(`${prefix} 等待主页面中的 ws-manager iframe 元素...`);
+        // 先确保页面完全加载
+        await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
         const iframeElement = page.locator('#ws-manager');
-        await iframeElement.waitFor({ state: 'visible', timeout: 30000 });
+        await iframeElement.waitFor({ state: 'visible', timeout: 60000 });
         console.log(`${prefix} 主页面中的 ws-manager iframe 元素已找到并可见。`);
 
         // 5. 获取 iframe 的引用

@@ -40,26 +40,12 @@ function processUrlWithProxy(originalUrl) {
         const workerUrl = process.env.CF_WORKER_URL;
         if (workerUrl && workerUrl.trim()) {
             try {
-                const urlObj = new URL(originalUrl);
-                const proxyUrl = new URL(workerUrl);
-                
-                // 尝试两种模式：
-                // 1. 通过查询参数传递（cf-worker-simple.js风格）
-                proxyUrl.searchParams.set('url', originalUrl);
-                
-                // 2. 同时尝试通过路径传递（cf-worker-example.js风格）
-                // 将目标域名作为路径的一部分
-                const pathBasedUrl = new URL(workerUrl);
                 // 移除worker URL末尾的斜杠，如果有的话
                 const cleanWorkerUrl = workerUrl.replace(/\/$/, '');
-                pathBasedUrl.pathname = `/${urlObj.hostname}${urlObj.pathname}`;
-                
-                // 返回两种可能的URL，让用户根据实际Worker实现选择
-                console.log(`CF Worker选项1（查询参数）: ${proxyUrl.toString()}`);
-                console.log(`CF Worker选项2（路径方式）: ${pathBasedUrl.toString()}`);
-                
-                // 默认使用查询参数方式（因为cf-worker-simple.js是这种实现）
-                return proxyUrl.toString();
+                // 构建代理URL：workerUrl?url=encodedOriginalUrl
+                const proxyUrl = `${cleanWorkerUrl}?url=${encodeURIComponent(originalUrl)}`;
+                console.log(`CF Worker代理URL: ${proxyUrl}`);
+                return proxyUrl;
             } catch (e) {
                 console.warn(`Cloudflare Worker URL处理失败: ${e.message}`);
             }

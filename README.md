@@ -73,6 +73,41 @@ cp .env.example .env   # 编辑 .env 填入账号信息
 npm start
 ```
 
+### Cloudflare Worker 代理（解决国内网络慢问题）
+
+如果你的网络访问SAP BAS较慢，可以使用Cloudflare Worker作为代理加速。
+
+#### 1. 部署Cloudflare Worker
+将 `cf-worker-bas-proxy.js` 部署到你的Cloudflare Worker（例如：`https://sap.kob8283.workers.dev`）。
+
+#### 2. 配置 `.env` 文件
+```env
+# Cloudflare Worker代理配置
+PROXY_MODE=cf-worker
+CF_WORKER_URL=https://sap.kob8283.workers.dev
+
+# 原有账号配置保持不变
+BAS_URL_1=https://39a6e423trial.ap21cf.trial.applicationstudio.cloud.sap
+BAS_EMAIL_1=user@example.com
+# ...
+```
+
+#### 3. 工作原理
+脚本会自动将请求通过Cloudflare Worker转发：
+- 原始URL: `https://xxx.trial.applicationstudio.cloud.sap`
+- 处理后URL: `https://sap.kob8283.workers.dev/?url=https%3A%2F%2Fxxx.trial.applicationstudio.cloud.sap`
+
+#### 4. 其他代理选项
+```env
+# 方案A：HTTP代理
+PROXY_MODE=direct
+PROXY_URL=http://proxy.example.com:8080
+
+# 方案B：自定义代理
+PROXY_MODE=custom-proxy
+CUSTOM_PROXY_BASE=https://proxy.example.com
+```
+
 ### Docker 运行
 
 ```bash

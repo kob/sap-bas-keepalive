@@ -45,10 +45,18 @@ function processUrlWithProxy(originalUrl) {
                 // 构建代理URL：workerUrl?url=encodedOriginalUrl
                 const proxyUrl = `${cleanWorkerUrl}?url=${encodeURIComponent(originalUrl)}`;
                 console.log(`CF Worker代理URL: ${proxyUrl}`);
+                console.log('注意: 如果遇到CORS错误，可能需要：');
+                console.log('  1. 确保Worker已部署且代码包含CORS支持');
+                console.log('  2. 或切换到direct模式：PROXY_MODE=direct');
+                console.log('  3. 或使用本地代理：PROXY_MODE=custom-proxy, CUSTOM_PROXY_BASE=http://localhost:3000');
                 return proxyUrl;
             } catch (e) {
                 console.warn(`Cloudflare Worker URL处理失败: ${e.message}`);
+                console.log('建议切换到direct模式或使用本地代理');
             }
+        } else {
+            console.warn('CF_WORKER_URL未设置，无法使用CF Worker代理');
+            console.log('请设置CF_WORKER_URL或切换到direct模式');
         }
     } else if (proxyMode === 'custom-proxy') {
         const customProxyBase = process.env.CUSTOM_PROXY_BASE;

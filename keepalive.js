@@ -3,6 +3,75 @@ const { chromium } = require('playwright');
 const os = require('os');
 const path = require('path');
 
+/**
+ * 获取代理服务器配置
+ * 支持格式：
+ * - http://proxy.example.com:8080
+ * - socks5://proxy.example.com:1080
+ * - 空字符串表示不使用代理
+ */
+function getProxyConfig() {
+    const proxyUrl = process.env.PROXY_URL || '';
+    if (!proxyUrl || !proxyUrl.trim()) {
+        return null;
+    }
+    
+    try {
+        const url = new URL(proxyUrl);
+        return {
+            server: proxyUrl,
+            // 对于SAP BAS服务，我们可能需要绕过某些域名
+            bypass: process.env.PROXY_BYPASS || 'localhost,127.0.0.1,*.cloud.sap'
+        };
+    } catch (e) {
+        console.warn(`代理URL格式错误: ${proxyUrl}, 错误: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * 处理URL，如果需要通过代理重写
+ * 支持Cloudflare Worker反代模式
+ */
+function processUrlWithProxy(originalUrl) {
+    const proxyMode = process.env.PROXY_MODE || 'direct'; // direct, cf-worker, custom-proxy
+    
+    if (proxyMode === 'cf-worker') {
+        const workerUrl = process.env.CF_WORKER_URL;
+        if (workerUrl && workerUrl.trim()) {
+            try {
+                const urlObj = new URL(originalUrl);
+                // 通过Worker代理
+                const proxyUrl = new URL(workerUrl);
+                proxyUrl.pathname = urlObj.pathname;
+                proxyUrl.search = urlObj.search;
+                proxyUrl.hash = urlObj.hash;
+                return proxyUrl.toString();
+            } catch (e) {
+                console.warn(`Cloudflare Worker URL处理失败: ${e.message}`);
+            }
+        }
+    } else if (proxyMode === 'custom-proxy') {
+        const customProxyBase = process.env.CUSTOM_PROXY_BASE;
+        if (customProxyBase && customProxyBase.trim()) {
+            try {
+                const urlObj = new URL(originalUrl);
+                const proxyUrl = new URL(customProxyBase);
+                // 将目标主机名作为子域名或路径
+                proxyUrl.hostname = `${urlObj.hostname}.${proxyUrl.hostname}`;
+                proxyUrl.pathname = urlObj.pathname;
+                proxyUrl.search = urlObj.search;
+                proxyUrl.hash = urlObj.hash;
+                return proxyUrl.toString();
+            } catch (e) {
+                console.warn(`自定义代理URL处理失败: ${e.message}`);
+            }
+        }
+    }
+    
+    return originalUrl; // 直接模式，返回原始URL
+}
+
 function getRequiredEnv(name) {
     const value = process.env[name];
     if (!value || !value.trim()) {
@@ -448,12 +517,13 @@ async function handleIndexPagePrivacyPopup(page, options = {}) {
  * 对单个账号执行保活操作
  * 返回 true 表示成功，抛出异常表示失败
  */
-async function keepaliveOne(browser, account, globalOptions) {
+async function keepaliveOne(browser, account, globalOptions, proxyConfig) {
     const { postPrivacyWaitMs, rememberMeWaitMs } = globalOptions;
     const prefix = `[${account.name}]`;
 
     const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 }
+        viewport: { width: 1280, height: 720 },
+        proxy: proxyConfig // 添加代理配置
     });
     const page = await context.newPage();
     let success = false;
@@ -461,8 +531,11 @@ async function keepaliveOne(browser, account, globalOptions) {
     try {
         console.log(`${prefix} 正在打开 BAS 主页...`);
 
-        // 1. 访问页面
-        await page.goto(account.url, { waitUntil: 'networkidle', timeout: 60000 });
+        // 1. 访问页面（使用代理处理后的URL）
+        const processedUrl = processUrlWithProxy(account.url);
+        console.log(`${prefix} 原始URL: ${account.url}`);
+        console.log(`${prefix} 处理后URL: ${processedUrl}`);
+        await page.goto(processedUrl, { waitUntil: 'networkidle', timeout: 60000 });
 
         // 2. 执行登录逻辑
         if (page.url().includes('authentication') || page.url().includes('login')) {
@@ -616,9 +689,11 @@ async function keepaliveOne(browser, account, globalOptions) {
 
         // 11. 进入工作区
         console.log(`${prefix} 正在进入工作区...`);
-        const workspaceUrl = `${account.url}#${account.wsid}`;
+        const baseUrl = account.url.split('#')[0]; // 移除可能存在的hash
+        const processedBaseUrl = processUrlWithProxy(baseUrl);
+        const workspaceUrl = `${processedBaseUrl}#${account.wsid}`;
         console.log(`${prefix} 工作区链接: ${workspaceUrl}`);
-        await page.goto(workspaceUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        await page.goto(workspaceUrl, { waitUntil: 'domcontentloaded', timeout: 180000 }); // 增加超时到3分钟
         await page.waitForTimeout(10000);
         console.log(`${prefix} 已成功进入工作区！`);
 
@@ -673,6 +748,15 @@ async function keepaliveOne(browser, account, globalOptions) {
 
     console.log(`共 ${accounts.length} 个账号需要保活，开始轮流执行...\n`);
 
+    // 获取代理配置
+    const proxyConfig = getProxyConfig();
+    const proxyMode = process.env.PROXY_MODE || 'direct';
+    
+    console.log(`代理模式: ${proxyMode}`);
+    if (proxyConfig) {
+        console.log(`使用代理服务器: ${proxyConfig.server}`);
+    }
+
     const browser = await chromium.launch({
         headless: true,
         slowMo: 100,
@@ -685,7 +769,7 @@ async function keepaliveOne(browser, account, globalOptions) {
         const results = await Promise.allSettled(
             accounts.map((account, i) => {
                 console.log(`========== ${account.name} (${i + 1}/${accounts.length}) ==========`);
-                return keepaliveOne(browser, account, globalOptions);
+                return keepaliveOne(browser, account, globalOptions, proxyConfig);
             })
         );
 

@@ -22,13 +22,36 @@ function getOptionalNumberEnv(name, defaultValue) {
 
 /**
  * 解析账号配置，支持多账号
- * 按索引读取 BAS_URL_1/BAS_EMAIL_1/BAS_PASSWORD_1/BAS_WSID_1, BAS_URL_2/... 等
- * 如果没有带索引的变量，回退到 BAS_URL/BAS_EMAIL/BAS_PASSWORD/BAS_WSID 单账号模式
+ * 优先级：ACCOUNTS JSON > 逐行索引 BAS_URL_1/... > 单账号 BAS_URL/...
  */
 function parseAccounts() {
-    const accounts = [];
+    // 1. 优先使用 ACCOUNTS JSON（适合 GitHub Actions 只设一个 secret）
+    const accountsRaw = process.env.ACCOUNTS;
+    if (accountsRaw && accountsRaw.trim()) {
+        try {
+            const arr = JSON.parse(accountsRaw);
+            if (!Array.isArray(arr) || arr.length === 0) {
+                throw new Error('ACCOUNTS 必须是非空 JSON 数组');
+            }
+            return arr.map((acc, i) => {
+                if (!acc.url || !acc.email || !acc.password || !acc.wsid) {
+                    throw new Error(`ACCOUNTS[${i}] 缺少必填字段 (url/email/password/wsid)`);
+                }
+                return {
+                    name: acc.name?.trim() || `账号${i + 1}`,
+                    url: acc.url.trim(),
+                    email: acc.email.trim(),
+                    password: acc.password.trim(),
+                    wsid: acc.wsid.trim(),
+                };
+            });
+        } catch (e) {
+            throw new Error(`ACCOUNTS 解析失败: ${e.message}`);
+        }
+    }
 
-    // 尝试按索引读取多账号
+    // 2. 逐行索引模式（适合 .env 文件，每个账号写一行）
+    const accounts = [];
     for (let i = 1; ; i++) {
         const url = process.env[`BAS_URL_${i}`];
         if (!url || !url.trim()) break;
@@ -37,8 +60,9 @@ function parseAccounts() {
         const wsid = process.env[`BAS_WSID_${i}`];
         const name = process.env[`BAS_NAME_${i}`]?.trim() || `账号${i}`;
 
-        if (!email || !password || !wsid) {
-            throw new Error(`账号 ${i} (BAS_URL_${i}) 缺少必填字段 BAS_EMAIL_${i}/BAS_PASSWORD_${i}/BAS_WSID_${i}`);
+        if (!email || !email.trim() || !password || !password.trim() || !wsid || !wsid.trim()) {
+            console.warn(`⚠️ 跳过账号 ${i} (BAS_URL_${i}): 缺少必填字段 BAS_EMAIL_${i}/BAS_PASSWORD_${i}/BAS_WSID_${i}`);
+            continue;
         }
 
         accounts.push({
@@ -54,7 +78,7 @@ function parseAccounts() {
         return accounts;
     }
 
-    // 单账号模式（不带索引）
+    // 3. 单账号模式（不带索引）
     return [{
         name: '默认账号',
         url: getRequiredEnv('BAS_URL'),

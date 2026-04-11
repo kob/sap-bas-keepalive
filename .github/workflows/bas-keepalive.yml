@@ -30,40 +30,18 @@ jobs:
 
       - name: Run Keep-Alive Script
         env:
-          # 多账号模式：在 GitHub Secrets 中设置 BAS_URL_1, BAS_EMAIL_1, BAS_PASSWORD_1, BAS_WSID_1 等
-          # 索引从 1 开始递增，脚本自动检测。未设置的会为空，脚本自动跳过。
-          # 也可使用 BAS_NAME_1 等设置账号别名
+          # 推荐方式：只设一个 ACCOUNTS secret，值为 JSON 数组
+          # 示例值：[{"url":"https://xxx.cloud.sap","email":"a@b.com","password":"p1","wsid":"ws-1"},{"url":"https://yyy.cloud.sap","email":"c@d.com","password":"p2","wsid":"ws-2"}]
+          # 可选加 "name" 字段作为账号别名
+          ACCOUNTS: ${{ secrets.ACCOUNTS }}
+
+          # 备选方式：逐行设置（适合 .env 文件，GitHub Actions 中需要设很多 secrets）
           BAS_URL_1: ${{ secrets.BAS_URL_1 }}
           BAS_EMAIL_1: ${{ secrets.BAS_EMAIL_1 }}
           BAS_PASSWORD_1: ${{ secrets.BAS_PASSWORD_1 }}
           BAS_WSID_1: ${{ secrets.BAS_WSID_1 }}
-          BAS_NAME_1: ${{ secrets.BAS_NAME_1 }}
 
-          BAS_URL_2: ${{ secrets.BAS_URL_2 }}
-          BAS_EMAIL_2: ${{ secrets.BAS_EMAIL_2 }}
-          BAS_PASSWORD_2: ${{ secrets.BAS_PASSWORD_2 }}
-          BAS_WSID_2: ${{ secrets.BAS_WSID_2 }}
-          BAS_NAME_2: ${{ secrets.BAS_NAME_2 }}
-
-          BAS_URL_3: ${{ secrets.BAS_URL_3 }}
-          BAS_EMAIL_3: ${{ secrets.BAS_EMAIL_3 }}
-          BAS_PASSWORD_3: ${{ secrets.BAS_PASSWORD_3 }}
-          BAS_WSID_3: ${{ secrets.BAS_WSID_3 }}
-          BAS_NAME_3: ${{ secrets.BAS_NAME_3 }}
-
-          BAS_URL_4: ${{ secrets.BAS_URL_4 }}
-          BAS_EMAIL_4: ${{ secrets.BAS_EMAIL_4 }}
-          BAS_PASSWORD_4: ${{ secrets.BAS_PASSWORD_4 }}
-          BAS_WSID_4: ${{ secrets.BAS_WSID_4 }}
-          BAS_NAME_4: ${{ secrets.BAS_NAME_4 }}
-
-          BAS_URL_5: ${{ secrets.BAS_URL_5 }}
-          BAS_EMAIL_5: ${{ secrets.BAS_EMAIL_5 }}
-          BAS_PASSWORD_5: ${{ secrets.BAS_PASSWORD_5 }}
-          BAS_WSID_5: ${{ secrets.BAS_WSID_5 }}
-          BAS_NAME_5: ${{ secrets.BAS_NAME_5 }}
-
-          # 单账号模式（回退，如果没有设置 BAS_URL_1 则使用这些）
+          # 单账号回退
           BAS_URL: ${{ secrets.BAS_URL }}
           BAS_EMAIL: ${{ secrets.BAS_EMAIL }}
           BAS_PASSWORD: ${{ secrets.BAS_PASSWORD }}

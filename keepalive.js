@@ -102,6 +102,15 @@ function getOptionalNumberEnv(name, defaultValue) {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
 }
 
+function getOptionalBoolEnv(name, defaultValue) {
+    const raw = process.env[name];
+    if (!raw) {
+        return defaultValue;
+    }
+    const lower = raw.toLowerCase().trim();
+    return lower === 'true' || lower === '1' || lower === 'yes' || lower === 'y';
+}
+
 /**
  * 解析账号配置，支持多账号
  * 优先级：ACCOUNTS JSON > 逐行索引 BAS_URL_1/... > 单账号 BAS_URL/...
@@ -778,7 +787,7 @@ async function keepaliveOne(browser, account, globalOptions, proxyConfig) {
     }
 
     const browser = await chromium.launch({
-        headless: true,
+        headless: getOptionalBoolEnv('HEADLESS', true), // 默认true（无头模式），设置为false显示浏览器界面
         slowMo: 100,
         args: process.platform === 'linux'
             ? ['--no-sandbox', '--disable-setuid-sandbox']

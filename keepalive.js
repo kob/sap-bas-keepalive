@@ -3,6 +3,13 @@ const { chromium } = require('playwright');
 const os = require('os');
 const path = require('path');
 
+/**
+ * 直接返回原始URL（取消代理模式）
+ */
+function processUrlWithProxy(originalUrl) {
+    return originalUrl;
+}
+
 function getRequiredEnv(name) {
     const value = process.env[name];
     if (!value || !value.trim()) {
@@ -18,6 +25,18 @@ function getOptionalNumberEnv(name, defaultValue) {
     }
     const parsed = Number(raw);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
+}
+
+function getOptionalBoolEnv(name, defaultValue) {
+    const raw = process.env[name];
+    if (!raw) {
+        return defaultValue;
+    }
+    const lower = raw.toLowerCase().trim();
+    if (lower === 'false' || lower === '0' || lower === 'no' || lower === 'n') {
+        return false;
+    }
+    return lower === 'true' || lower === '1' || lower === 'yes' || lower === 'y';
 }
 
 /**

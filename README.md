@@ -67,6 +67,8 @@ BAS_WSID=ws-abc
 ### 本地运行
 
 ```bash
+git clone https://github.com/kob/sap-bas-keepalive
+cd sap-bas-keepalive
 npm install
 npx playwright install chromium
 cp .env.example .env   # 编辑 .env 填入账号信息

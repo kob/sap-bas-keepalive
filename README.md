@@ -73,16 +73,18 @@ cp .env.example .env   # 编辑 .env 填入账号信息
 npm start
 ```
 
-### 浏览器可视化模式
+### Cloudflare Worker 代理（解决国内网络慢问题）
 
-如果你想查看浏览器操作过程，可以将浏览器设置为可视化模式。
+如果你的网络访问SAP BAS较慢，可以使用Cloudflare Worker作为代理加速。
 
-#### 配置 `.env` 文件
+#### 1. 部署Cloudflare Worker
+将 `cf-worker-bas-proxy.js` 部署到你的Cloudflare Worker（例如：`https://sap.kob8283.workers.dev`）。
+
+#### 2. 配置 `.env` 文件
 ```env
-# 浏览器显示配置
-# true: 无头模式，不显示浏览器界面（适合服务器环境）
-# false: 显示浏览器界面（适合调试和可视化操作）
-HEADLESS=false
+# Cloudflare Worker代理配置
+PROXY_MODE=cf-worker
+CF_WORKER_URL=https://sap.kob8283.workers.dev
 
 # 原有账号配置保持不变
 BAS_URL_1=https://39a6e423trial.ap21cf.trial.applicationstudio.cloud.sap
@@ -90,8 +92,21 @@ BAS_EMAIL_1=user@example.com
 # ...
 ```
 
-#### 工作原理
-脚本直接连接SAP BAS服务器，无需代理。浏览器界面会显示登录和操作过程。
+#### 3. 工作原理
+脚本会自动将请求通过Cloudflare Worker转发：
+- 原始URL: `https://xxx.trial.applicationstudio.cloud.sap`
+- 处理后URL: `https://sap.kob8283.workers.dev/?url=https%3A%2F%2Fxxx.trial.applicationstudio.cloud.sap`
+
+#### 4. 其他代理选项
+```env
+# 方案A：HTTP代理
+PROXY_MODE=direct
+PROXY_URL=http://proxy.example.com:8080
+
+# 方案B：自定义代理
+PROXY_MODE=custom-proxy
+CUSTOM_PROXY_BASE=https://proxy.example.com
+```
 
 ### Docker 运行
 
@@ -117,7 +132,6 @@ docker run --rm \
 |------|------|--------|
 | `BAS_POST_PRIVACY_WAIT_MS` | 隐私弹窗点击后等待时间（毫秒） | 800 |
 | `BAS_REMEMBER_WAIT_MS` | 查找"保持登录"复选框超时（毫秒） | 1800 |
-| `HEADLESS` | 浏览器是否显示界面（true=无头模式，false=可视化） | true |
 
 ## 文件说明
 
@@ -128,5 +142,3 @@ docker run --rm \
 | `Dockerfile` | Docker 镜像构建 |
 | `.env.example` | 环境变量模板 |
 | `.github/workflows/bas-keepalive.yml` | GitHub Actions 工作流 |
-| `.gitignore` | Git忽略文件配置 |
-| `entrypoint.sh` | Docker容器入口脚本 |

@@ -19,7 +19,7 @@ fi
 # 写入 cron 任务
 # 将环境变量导出到脚本中，以便 cron job 能读取
 ENV_FILE="/app/.env.cron"
-printenv | grep -E '^(BAS_|ACCOUNTS|CRON|TZ)' > "${ENV_FILE}" 2>/dev/null || true
+printenv | grep -E '^(BAS_|ACCOUNTS|CRON|TZ|HEADLESS)' > "${ENV_FILE}" 2>/dev/null || true
 
 CRON_SCRIPT="/app/run-keepalive.sh"
 cat > "${CRON_SCRIPT}" << 'SCRIPT'

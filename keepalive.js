@@ -694,9 +694,11 @@ async function keepaliveOne(browser, account, globalOptions) {
 
     const browser = await chromium.launch({
         headless: true,
-        slowMo: 100,
+        // slowMo 默认 0：容器里每个动作多等 100ms 只会拉长总耗时、增加超时风险，需要调试时用 BAS_SLOWMO_MS 打开
+        slowMo: getOptionalNumberEnv('BAS_SLOWMO_MS', 0),
         args: process.platform === 'linux'
-            ? ['--no-sandbox', '--disable-setuid-sandbox']
+            // --disable-dev-shm-usage：容器内 /dev/shm 常常只有 64M，不禁用会导致 Chromium 挂死
+            ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
             : []
     });
 
@@ -712,6 +714,10 @@ async function keepaliveOne(browser, account, globalOptions) {
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected').length;
         console.log(`\n========== 执行汇总：成功 ${succeeded}/${accounts.length}，失败 ${failed} ==========`);
+        if (failed > 0) {
+            // 有失败时返回非 0，让 cron / GitHub Actions 能判定失败（否则永远绿灯）
+            process.exitCode = 1;
+        }
     } finally {
         await browser.close();
     }

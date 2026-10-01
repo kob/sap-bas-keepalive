@@ -18,15 +18,25 @@ fi
 
 # 写入 cron 任务
 # 将环境变量导出到脚本中，以便 cron job 能读取
+# 注意：写成可 source 的 KEY='value' 形式（单引号转义），
+# 这样 ACCOUNTS JSON / 含空格或引号的密码都能原样传给 cron 子进程。
+# 旧写法 export $(... | xargs) 会按空白切词，导致 JSON 被当成命令执行而丢环境变量。
 ENV_FILE="/app/.env.cron"
-printenv | grep -E '^(BAS_|ACCOUNTS|CRON|TZ|HEADLESS)' > "${ENV_FILE}" 2>/dev/null || true
+: > "${ENV_FILE}"
+printenv | grep -E '^(BAS_|ACCOUNTS=|CRON=|TZ=|HEADLESS=)' | while IFS= read -r kv; do
+    k=${kv%%=*}
+    v=$(printf '%s' "${kv#*=}" | sed "s/'/'\\\\''/g")
+    printf "%s='%s'\n" "${k}" "${v}" >> "${ENV_FILE}"
+done || true
 
 CRON_SCRIPT="/app/run-keepalive.sh"
 cat > "${CRON_SCRIPT}" << 'SCRIPT'
 #!/bin/sh
-# 加载环境变量
+# 加载环境变量（source，而不是 export $(... | xargs)）
 if [ -f /app/.env.cron ]; then
-    export $(grep -v '^#' /app/.env.cron | xargs) 2>/dev/null || true
+    set -a
+    . /app/.env.cron
+    set +a
 fi
 echo "$(date '+%Y-%m-%d %H:%M:%S') 开始执行保活..."
 node /app/keepalive.js

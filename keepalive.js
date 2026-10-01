@@ -65,7 +65,23 @@ function parseAccounts() {
                 };
             });
         } catch (e) {
-            throw new Error(`ACCOUNTS 解析失败: ${e.message}`);
+            // 报错信息带上出错位置和附近结构，方便定位（敏感字符打码，避免把密码写进日志）
+            const raw = accountsRaw;
+            const posMatch = /position (\d+)/.exec(e.message);
+            const pos = posMatch ? Number(posMatch[1]) : -1;
+            const start = pos >= 0 ? Math.max(0, pos - 40) : 0;
+            const end = pos >= 0 ? Math.min(raw.length, pos + 40) : Math.min(raw.length, 120);
+            const masked = raw.slice(start, end).replace(/[A-Za-z0-9\u4e00-\u9fa5]/g, '*');
+            const multiArrayHint = /\]\s*[,;]?\s*\[/.test(raw)
+                ? '（疑似写了多个 JSON 数组：多个账号必须放在同一个数组里，对象之间用逗号分隔）'
+                : '';
+            throw new Error(
+                `ACCOUNTS 解析失败: ${e.message}` +
+                `｜ACCOUNTS 长度=${raw.length}` +
+                (pos >= 0 ? `｜出错位置=${pos}` : '') +
+                `｜附近结构(字母数字与中文已打码)=${masked}` +
+                multiArrayHint
+            );
         }
     }
 

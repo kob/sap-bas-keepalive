@@ -1,6 +1,18 @@
 #!/bin/sh
 set -e
 
+# 运行时同步最新代码（绕过 HF 构建缓存）
+# 即使镜像构建时 clone 的是旧 main，这里也强制拉取最新并重新执行本脚本，
+# 确保 CRON 兜底等修复一定生效；后续代码更新也只需重启容器，无需重新构建。
+if [ -z "${_KB_SYNCED}" ] && [ -d /app/.git ]; then
+  export _KB_SYNCED=1
+  echo "[sync] 拉取最新代码 (git fetch + reset)..."
+  git -c http.sslVerify=false -C /app fetch --depth 1 origin main 2>&1 | tail -2 || true
+  git -C /app reset --hard origin/main 2>&1 | tail -1 || true
+  echo "[sync] 重新执行更新后的 entrypoint..."
+  exec /app/entrypoint.sh "$@"
+fi
+
 # 规范化 CRON：若字段数不为 5（如手写漏空格 "*/30* * * *"），
 # crontab 会报 "bad minute" 导致安装失败、容器退出。这里兜底回退默认。
 if [ -n "${CRON}" ]; then

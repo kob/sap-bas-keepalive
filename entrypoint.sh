@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+# 规范化 CRON：若字段数不为 5（如手写漏空格 "*/30* * * *"），
+# crontab 会报 "bad minute" 导致安装失败、容器退出。这里兜底回退默认。
+if [ -n "${CRON}" ]; then
+    _fc=$(printf '%s' "${CRON}" | awk '{print NF}')
+    if [ "${_fc}" -ne 5 ]; then
+        echo "CRON '${CRON}' 字段数=${_fc} 非法(应为5)，回退默认 '*/30 * * * *'"
+        CRON="*/30 * * * *"
+    fi
+fi
+
 # 如果设置了 NO_CRON=1 或没有设置 CRON，直接执行一次脚本后退出
 if [ "${NO_CRON}" = "1" ] || [ -z "${CRON}" ]; then
     echo "单次执行模式"

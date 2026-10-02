@@ -40,6 +40,9 @@ done || true
 CRON_SCRIPT="/app/run-keepalive.sh"
 cat > "${CRON_SCRIPT}" << 'SCRIPT'
 #!/bin/sh
+# cron 环境的 PATH 默认只有 /usr/bin:/bin，找不到 /usr/local/bin/node，
+# 这里显式补全（node:20-slim 的 node 在 /usr/local/bin）。
+export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 # 加载环境变量（source，而不是 export $(... | xargs)）
 if [ -f /app/.env.cron ]; then
     set -a

@@ -1,14 +1,12 @@
 #!/bin/sh
 set -e
 
-# 规范化 CRON：若字段数不为 5（如手写漏空格 "*/30* * * *"），
-# crontab 会报 "bad minute" 导致安装失败、容器退出。这里兜底回退默认。
-if [ -n "${CRON}" ]; then
-    _fc=$(printf '%s' "${CRON}" | awk '{print NF}')
-    if [ "${_fc}" -ne 5 ]; then
-        echo "CRON '${CRON}' 字段数=${_fc} 非法(应为5)，回退默认 '*/30 * * * *'"
-        CRON="*/30 * * * *"
-    fi
+# 规范化 CRON：绝不让容器因 bad minute 退出。
+# 策略：先用用户值尝试安装进 crontab；安装失败（任何非法语法，含 "*/30*" 这种
+# 字段数正确但字段内容非法的写法）就回退默认 "*/30 * * * *"。
+DEFAULT_CRON="*/30 * * * *"
+if [ -z "${CRON}" ]; then
+    CRON="${DEFAULT_CRON}"
 fi
 
 # 如果设置了 NO_CRON=1 或没有设置 CRON，直接执行一次脚本后退出
@@ -54,8 +52,14 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') 执行完成"
 SCRIPT
 chmod +x "${CRON_SCRIPT}"
 
-# 生成 cron 配置
-echo "${CRON} ${CRON_SCRIPT} >> /var/log/keepalive.log 2>&1" | crontab -
+# 生成 cron 配置：用 crontab 自身校验，装不上就回退默认（彻底杜绝 bad minute 致容器退出）
+CRON_LINE="${CRON} ${CRON_SCRIPT} >> /var/log/keepalive.log 2>&1"
+if ! printf '%s\n' "${CRON_LINE}" | crontab - 2>/dev/null; then
+    echo "CRON '${CRON}' 安装失败(bad minute 等)，回退默认 '${DEFAULT_CRON}'"
+    CRON="${DEFAULT_CRON}"
+    CRON_LINE="${CRON} ${CRON_SCRIPT} >> /var/log/keepalive.log 2>&1"
+    printf '%s\n' "${CRON_LINE}" | crontab -
+fi
 
 echo "Cron 已配置: ${CRON}"
 echo "日志文件: /var/log/keepalive.log"

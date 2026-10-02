@@ -11,21 +11,77 @@
 - **多账号并行保活**，总耗时≈单账号耗时
 - 支持 GitHub Actions 定时执行 / 本地运行 / Docker 运行
 
-## 配置方式
+## Hugging Face Spaces 部署（推荐，纯环境变量）
 
-支持三种配置方式（优先级从高到低）：
+账号**全部走 HF 的 Variables and secrets（即容器内的 Docker 环境变量），不需要也不读取任何 `.env` 文件**。
 
-### 方式一：ACCOUNTS JSON（推荐 GitHub Actions）
+> 路径：Space 页面 → **Settings** → **Variables and secrets** → 逐条 **New variable** 添加。
+> 改完必须点右上角 **⋯ → Factory rebuild**（只 Restart 不会重读 secret）。
 
-在 `.env` 文件或环境变量中设置一个 `ACCOUNTS`，值为 JSON 数组：
+### 多账号（最稳，推荐）：索引式环境变量
+
+每个账号一组**短变量**，没有长 JSON，绝不会被粘贴截断：
+
+| 变量 | 说明 | 必填 |
+|------|------|------|
+| `BAS_URL_1` | 账号1 的 BAS 首页 URL | ✅ |
+| `BAS_EMAIL_1` | 账号1 邮箱 | ✅ |
+| `BAS_PASSWORD_1` | 账号1 密码 | ✅ |
+| `BAS_WSID_1` | 账号1 工作区 ID（形如 `ws-abc`） | ✅ |
+| `BAS_NAME_1` | 账号1 别名（可选） | ⬜ |
+
+账号 2、3 … 把下标改成 `2`、`3` 即可（`BAS_URL_2` / `BAS_EMAIL_2` …）。脚本从 `1` 自动递增检测，遇到第一个缺失的 `BAS_URL_N` 停止。
+
+```env
+BAS_URL_1=https://39a6e423trial.ap21cf.trial.applicationstudio.cloud.sap/index.html
+BAS_EMAIL_1=3966513219@qq.com
+BAS_PASSWORD_1=Tclz6080313
+BAS_WSID_1=ws-j6w4r
+BAS_NAME_1=账号1-hsd
+
+BAS_URL_2=https://e1c92090trial.ap21cf.trial.applicationstudio.cloud.sap/index.html
+BAS_EMAIL_2=kob8283@gmail.com
+BAS_PASSWORD_2=你的密码2
+BAS_WSID_2=ws-v146p
+BAS_NAME_2=账号2-kobsg
+```
+
+### 单账号：直接变量
+
+```env
+BAS_URL=https://xxx.cloud.sap
+BAS_EMAIL=a@b.com
+BAS_PASSWORD=pass1
+BAS_WSID=ws-abc
+```
+
+### 可选但建议一起设（控制调度，shell 侧读取）
+
+```env
+CRON=*/30 * * * *     # 不设则单次执行后退出
+TZ=Asia/Shanghai
+# NO_CRON=1           # 设 1 则只跑一次不挂 cron
+```
+
+> 如果同时设了 `ACCOUNTS`（长 JSON）又设了上面的索引变量：`ACCOUNTS` 合法时优先；
+> 一旦 `ACCOUNTS` 被截断/写错，脚本会**告警并自动改用索引式变量**，不会整进程崩。
+
+## 配置方式（通用说明）
+
+支持三种配置方式（优先级从高到低），都来自环境变量，不依赖 `.env` 文件：
+
+### 方式一：ACCOUNTS JSON（可选，适合 GitHub Actions 单 secret）
+
+设置一个 `ACCOUNTS`，值为单行紧凑 JSON 数组：
 
 ```env
 ACCOUNTS=[{"url":"https://xxx.cloud.sap","email":"a@b.com","password":"p1","wsid":"ws-abc","name":"账号1"},{"url":"https://yyy.cloud.sap","email":"c@d.com","password":"p2","wsid":"ws-def","name":"账号2"}]
 ```
 
 每个对象必填字段：`url`、`email`、`password`、`wsid`，可选 `name`（账号别名）。
+⚠️ 必须是**单行**；写成多行美化 JSON 会被截断成第一行导致解析失败。**HF Spaces 上更推荐用下面的索引式变量，避免这个坑。**
 
-### 方式二：逐行索引（推荐 .env 文件）
+### 方式二：逐行索引（HF Spaces / Docker `-e` 推荐）
 
 ```env
 BAS_URL_1=https://xxx.cloud.sap

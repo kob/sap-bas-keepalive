@@ -42,9 +42,16 @@ function getOptionalBoolEnv(name, defaultValue) {
 /**
  * 解析账号配置，支持多账号
  * 优先级：ACCOUNTS JSON > 逐行索引 BAS_URL_1/... > 单账号 BAS_URL/...
+ * 设计目标：所有账号都来自环境变量（HF Spaces Variables and secrets /
+ *          docker -e / GitHub Actions secret），不依赖本地 .env 文件。
+ *          当 ACCOUNTS 存在但 JSON 不完整（HF 里粘贴截断是常见坑）时，
+ *          不再直接 throw 崩掉整个进程，而是告警后降级到索引式/单账号分支，
+ *          保证你设在别处的账号配置仍能生效。
  */
 function parseAccounts() {
-    // 1. 优先使用 ACCOUNTS JSON（适合 GitHub Actions 只设一个 secret）
+    // 1. 可选：ACCOUNTS JSON（把多个账号压成一个 secret，适合 GitHub Actions）
+    //    注意：HF / 容器里粘贴这个长 JSON 极易被截断或写错。写错时【不崩】，
+    //    下面会告警并自动改用第 2 步的索引式环境变量（HF 推荐用法，不会被截断）。
     const accountsRaw = process.env.ACCOUNTS;
     if (accountsRaw && accountsRaw.trim()) {
         try {
@@ -65,7 +72,7 @@ function parseAccounts() {
                 };
             });
         } catch (e) {
-            // 报错信息带上出错位置和附近结构，方便定位（敏感字符打码，避免把密码写进日志）
+            // ACCOUNTS 写错/被截断：【不直接崩进程】，告警并降级到索引式/单账号分支
             const raw = accountsRaw;
             const posMatch = /position (\d+)/.exec(e.message);
             const pos = posMatch ? Number(posMatch[1]) : -1;
@@ -75,13 +82,14 @@ function parseAccounts() {
             const multiArrayHint = /\]\s*[,;]?\s*\[/.test(raw)
                 ? '（疑似写了多个 JSON 数组：多个账号必须放在同一个数组里，对象之间用逗号分隔）'
                 : '';
-            throw new Error(
-                `ACCOUNTS 解析失败: ${e.message}` +
+            console.warn(
+                `⚠️ ACCOUNTS 解析失败，已忽略并改用索引式/单账号环境变量: ${e.message}` +
                 `｜ACCOUNTS 长度=${raw.length}` +
                 (pos >= 0 ? `｜出错位置=${pos}` : '') +
-                `｜附近结构(字母数字与中文已打码)=${masked}` +
+                `｜附近结构(已打码)=${masked}` +
                 multiArrayHint
             );
+            // 不 throw：继续往下走索引式 / 单账号分支
         }
     }
 

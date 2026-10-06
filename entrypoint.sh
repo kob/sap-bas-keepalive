@@ -102,6 +102,22 @@ http.createServer((req,res)=>{
 }).listen(port,"0.0.0.0",()=>console.log("status server listening on :"+port));
 ' &
 
+# 自探活防休眠：定时请求本 Space 公开 URL（经 HF 公网代理回流，算外部活动，重置 48h 休眠计时）。
+# 优先用 HF 自动注入的 HF_SPACE_OWNER / HF_SPACE_NAME 拼出 URL；可用 secret SELF_PING_URL 覆盖。
+SELF_PING_URL="${SELF_PING_URL:-}"
+if [ -z "${SELF_PING_URL}" ] && [ -n "${HF_SPACE_OWNER}" ] && [ -n "${HF_SPACE_NAME}" ]; then
+    SELF_PING_URL="https://huggingface.co/spaces/${HF_SPACE_OWNER}/${HF_SPACE_NAME}/healthz"
+fi
+if [ -n "${SELF_PING_URL}" ]; then
+    echo "启动自探活防休眠: ${SELF_PING_URL} (每 10 分钟)"
+    ( while true; do
+        sleep 600
+        curl -fsS -o /dev/null -m 30 "${SELF_PING_URL}" >/dev/null 2>&1 || true
+    done ) &
+else
+    echo "未检测到 HF Space 环境变量，跳过自探活（如需防休眠，请在 secret 设 SELF_PING_URL）"
+fi
+
 # 启动 cron 前台进程
 echo "启动定时调度器..."
 cron -f

@@ -33,14 +33,10 @@
 账号 2、3 … 把下标改成 `2`、`3` 即可（`BAS_URL_2` / `BAS_EMAIL_2` …）。脚本从 `1` 自动递增检测，遇到第一个缺失的 `BAS_URL_N` 停止。
 
 ```env
-BAS_URL_1=https://39a6e423trial.ap21cf.trial.applicationstudio.cloud.sap/index.html
-BAS_EMAIL_1=3966513219@qq.com
-BAS_PASSWORD_1=Tclz6080313
-BAS_WSID_1=ws-j6w4r
-BAS_NAME_1=账号1-hsd
 
-BAS_URL_2=https://e1c92090trial.ap21cf.trial.applicationstudio.cloud.sap/index.html
-BAS_EMAIL_2=kob8283@gmail.com
+
+BAS_URL_2=https://ff.ap21cf.trial.applicationstudio.cloud.sap/index.html
+BAS_EMAIL_2=xx
 BAS_PASSWORD_2=你的密码2
 BAS_WSID_2=ws-v146p
 BAS_NAME_2=账号2-kobsg
@@ -136,24 +132,13 @@ npm start
 如果你的网络访问SAP BAS较慢，可以使用Cloudflare Worker作为代理加速。
 
 #### 1. 部署Cloudflare Worker
-将 `cf-worker-bas-proxy.js` 部署到你的Cloudflare Worker（例如：`https://sap.kob8283.workers.dev`）。
+将 `cf-worker-bas-proxy.js` 部署到你的Cloudflare Worker（例如：`https://   .dev`）。
 
 #### 2. 配置 `.env` 文件
-```env
-# Cloudflare Worker代理配置
-PROXY_MODE=cf-worker
-CF_WORKER_URL=https://sap.kob8283.workers.dev
 
-# 原有账号配置保持不变
-BAS_URL_1=https://39a6e423trial.ap21cf.trial.applicationstudio.cloud.sap
-BAS_EMAIL_1=user@example.com
 # ...
 ```
 
-#### 3. 工作原理
-脚本会自动将请求通过Cloudflare Worker转发：
-- 原始URL: `https://xxx.trial.applicationstudio.cloud.sap`
-- 处理后URL: `https://sap.kob8283.workers.dev/?url=https%3A%2F%2Fxxx.trial.applicationstudio.cloud.sap`
 
 #### 4. 其他代理选项
 ```env
